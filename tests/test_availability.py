@@ -5,8 +5,8 @@ from app.services.availability import (
     AvailabilityService,
     find_available_slots,
 )
+from tests.conftest import MONDAY
 
-MONDAY = date(2026, 10, 19)
 BEFORE_DATA = datetime(2026, 10, 1, 8, 0)  # "now" earlier than every queried slot
 
 
