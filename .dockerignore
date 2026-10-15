@@ -1,0 +1,9 @@
+.git
+.env
+data/*.db
+ml/*.joblib
+ml/metrics.json
+__pycache__
+.pytest_cache
+docs
+tests
