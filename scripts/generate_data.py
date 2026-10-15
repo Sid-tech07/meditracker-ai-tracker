@@ -116,8 +116,8 @@ def generate(db_path: Path, anchor: date, seed: int = 42) -> dict:
                 pid, _, age, distance, unreliability = rng.choice(patients)
                 lead = _lead_days(rng)
                 if is_future:
-                    # can't have been booked in the future
-                    lead = min(lead, (day - anchor).days + rng.randint(0, 20))
+                    # booked on or before today: lead = days until the visit + days since booking
+                    lead = (day - anchor).days + lead // 2
                 booked_at = slot - timedelta(days=lead, hours=rng.randint(1, 8))
                 sms = lead >= 2 and rng.random() < 0.6
                 if is_future:
