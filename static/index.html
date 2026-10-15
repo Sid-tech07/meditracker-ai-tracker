@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MediTrack Front Desk</title>
+  <meta name="description" content="Appointment availability assistant and no-show risk for MediTrack clinic receptionists.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <p class="brand-name">MediTrack</p>
+        <p class="brand-sub">Front desk</p>
+      </div>
+    </div>
+    <p class="engine" id="engine" role="status">Connecting…</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-assistant" aria-controls="view-assistant" aria-selected="true">Assistant</button>
+    <button role="tab" id="tab-appointments" aria-controls="view-appointments" aria-selected="false" tabindex="-1">Appointments</button>
+    <button role="tab" id="tab-dashboard" aria-controls="view-dashboard" aria-selected="false" tabindex="-1">Dashboard</button>
+  </nav>
+
+  <main>
+    <!-- Assistant ------------------------------------------------------- -->
+    <section id="view-assistant" role="tabpanel" aria-labelledby="tab-assistant" class="view assistant">
+      <div class="chat">
+        <div class="log" id="chat-log" aria-live="polite">
+          <div class="intro" id="chat-intro">
+            <h1>Who can we fit in, and who might not come?</h1>
+            <p>Ask about free slots by day, doctor, department or symptom. Answers come straight from the clinic schedule.</p>
+            <div class="suggestions" id="suggestions">
+              <button type="button">Any cardiology slots tomorrow morning?</button>
+              <button type="button">When is Dr. Rao free on Monday?</button>
+              <button type="button">My kid has a fever, anything today?</button>
+              <button type="button">Which appointments tomorrow are high risk of no-show?</button>
+              <button type="button">What are the clinic hours?</button>
+            </div>
+          </div>
+        </div>
+        <form class="composer" id="chat-form" autocomplete="off">
+          <label for="chat-input" class="sr-only">Ask about appointments</label>
+          <input id="chat-input" name="message" maxlength="500" required
+                 placeholder="Ask about free slots or no-show risk">
+          <button type="submit" id="chat-send">Ask</button>
+        </form>
+      </div>
+
+      <aside class="glance" aria-labelledby="glance-title">
+        <h2 id="glance-title">Today</h2>
+        <p class="glance-date" id="glance-date"></p>
+        <dl class="glance-stats">
+          <div><dt>Booked</dt><dd id="glance-booked">–</dd></div>
+          <div><dt>Expected no-shows</dt><dd id="glance-expected">–</dd></div>
+        </dl>
+        <h3>Worth a reminder call</h3>
+        <ol class="watchlist" id="glance-watch"></ol>
+      </aside>
+    </section>
+
+    <!-- Appointments ----------------------------------------------------- -->
+    <section id="view-appointments" role="tabpanel" aria-labelledby="tab-appointments" class="view" hidden>
+      <div class="toolbar">
+        <div class="field">
+          <label for="appt-date">Day</label>
+          <input type="date" id="appt-date">
+        </div>
+        <fieldset class="segmented" id="risk-filter">
+          <legend>Risk</legend>
+          <label><input type="radio" name="risk" value="" checked><span>All</span></label>
+          <label><input type="radio" name="risk" value="high"><span>High</span></label>
+          <label><input type="radio" name="risk" value="medium"><span>Medium</span></label>
+          <label><input type="radio" name="risk" value="low"><span>Low</span></label>
+        </fieldset>
+      </div>
+      <p class="hint">Bars show each patient's chance of not turning up. The tick marks the clinic average of <span id="base-rate">16%</span>.</p>
+      <ul class="appts" id="appt-list" aria-live="polite"></ul>
+    </section>
+
+    <!-- Dashboard -------------------------------------------------------- -->
+    <section id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" class="view dashboard" hidden>
+      <div class="tiles" id="tiles"></div>
+
+      <div class="charts">
+        <figure class="card wide">
+          <figcaption>Appointments per month</figcaption>
+          <div class="chart-box"><canvas id="chart-monthly" role="img" aria-label="Completed appointments and no-shows per month"></canvas></div>
+        </figure>
+        <figure class="card">
+          <figcaption>No-show rate by how far ahead it was booked</figcaption>
+          <div class="chart-box"><canvas id="chart-lead" role="img" aria-label="No-show rate by booking lead time"></canvas></div>
+        </figure>
+        <figure class="card">
+          <figcaption>No-show rate by weekday</figcaption>
+          <div class="chart-box"><canvas id="chart-weekday" role="img" aria-label="No-show rate by weekday"></canvas></div>
+        </figure>
+        <figure class="card">
+          <figcaption>No-show rate by department</figcaption>
+          <div class="chart-box"><canvas id="chart-dept" role="img" aria-label="No-show rate by department"></canvas></div>
+        </figure>
+        <figure class="card">
+          <figcaption>Next 7 days: booked vs expected no-shows</figcaption>
+          <div class="chart-box"><canvas id="chart-upcoming" role="img" aria-label="Booked appointments and expected no-shows for the next seven days"></canvas></div>
+        </figure>
+      </div>
+
+      <div class="panels">
+        <section class="card" aria-labelledby="model-title">
+          <h2 id="model-title">Prediction model</h2>
+          <div id="model-card"></div>
+        </section>
+        <section class="card" aria-labelledby="usage-title">
+          <h2 id="usage-title">Assistant usage</h2>
+          <dl class="usage" id="usage"></dl>
+        </section>
+      </div>
+
+      <section class="card logs" aria-labelledby="logs-title">
+        <h2 id="logs-title">Recent questions</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Time</th><th scope="col">Question</th><th scope="col">Intent</th><th scope="col">Answered by</th><th scope="col">Speed</th></tr></thead>
+            <tbody id="log-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/vendor/chart.umd.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

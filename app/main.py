@@ -8,11 +8,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api import router as api_router
 from app.config import Settings, get_settings
 from app.container import bootstrap, build_services
 from ml.train import MODEL_PATH
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -36,6 +39,8 @@ def create_app(settings: Settings | None = None, model_path: Path = MODEL_PATH, 
         lifespan=lifespan,
     )
     app.include_router(api_router)
+    # Mounted last so /api/* routes win; serves index.html at "/".
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
     return app
 
 

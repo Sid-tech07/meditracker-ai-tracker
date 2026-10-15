@@ -57,7 +57,8 @@ class SlotGroup(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    reply: str
+    reply: str = Field(description="Full plain-text answer, readable on its own")
+    headline: str | None = Field(default=None, description="One-line summary for UIs that render results/risks themselves")
     intent: str
     date: str | None = None
     results: list[SlotGroup] = []

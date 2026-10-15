@@ -148,7 +148,7 @@ class ChatService:
                 reply += f" The next opening is {_pretty(nxt[0])}: {nxt[1].doctor} at {nxt[1].slots[0]}."
 
         return ChatResponse(
-            reply=reply, intent=q.intent, date=day.isoformat(),
+            reply=reply, headline=reply.split("\n", 1)[0], intent=q.intent, date=day.isoformat(),
             results=[SlotGroup(doctor=g.doctor, department=g.department, slots=list(g.slots)) for g in groups],
             source=source, cached=source == "cache" and data_cached, latency_ms=0,
         )
@@ -188,11 +188,12 @@ class ChatService:
 
         booked = 0 if df.empty else len(df)
         if risks:
+            headline = (f"{len(risks)} of {booked} appointments on {_pretty(day)} are high risk of a no-show. "
+                        "A reminder call could help.")
             top = ", ".join(f"{datetime.fromisoformat(r.start_time):%H:%M} {r.patient_name} ({r.no_show_probability:.0%})"
                             for r in risks[:5])
-            reply = (f"{len(risks)} of {booked} appointments on {_pretty(day)} are high risk of a no-show. "
-                     f"Highest: {top}. A reminder call could help.")
+            reply = f"{headline} Highest: {top}."
         else:
-            reply = f"None of the {booked} appointments on {_pretty(day)} are high risk."
-        return ChatResponse(reply=reply, intent=q.intent, date=day.isoformat(), risks=risks,
+            headline = reply = f"None of the {booked} appointments on {_pretty(day)} are high risk."
+        return ChatResponse(reply=reply, headline=headline, intent=q.intent, date=day.isoformat(), risks=risks,
                             source=source, cached=False, latency_ms=0)
