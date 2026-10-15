@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS chat_logs (
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
+    """One connection is shared across request threads. That is safe because this
+    SQLite build runs in serialized mode (sqlite3.threadsafety == 3); chat-log
+    writes additionally take a lock so their commit can't interleave."""
     path = Path(db_path or get_settings().database_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False)

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.container import Services, get_services
 from app.features import load_booked
-from app.schemas import AppointmentRisk, PredictionOut, PredictRequest, RiskBand
+from app.schemas import AppointmentRisk, ChatRequest, ChatResponse, PredictionOut, PredictRequest, RiskBand
 from app.services.predictor import NoShowPredictor
 
 router = APIRouter(prefix="/api")
@@ -83,3 +83,15 @@ def model_info(services: ServicesDep) -> dict:
     """Which model is serving and how it scored on the held-out period."""
     predictor: NoShowPredictor = services.predictor
     return predictor.metrics
+
+
+@router.post("/chat", response_model=ChatResponse)
+def chat(body: ChatRequest, services: ServicesDep) -> ChatResponse:
+    """Answer an availability / no-show question. Sync on purpose: FastAPI runs it in
+    a worker thread, so the blocking LLM call doesn't stall the event loop."""
+    return services.chat.handle(body.message)
+
+
+@router.get("/chat/logs")
+def chat_logs(services: ServicesDep, limit: Annotated[int, Query(ge=1, le=500)] = 50) -> list[dict]:
+    return services.chat_logger.recent(limit)

@@ -11,6 +11,9 @@ from fastapi import Request
 from app.config import Settings
 from app.db import connect, init_schema
 from app.services.availability import AvailabilityService
+from app.services.chat_log import ChatLogger
+from app.services.chatbot import ChatService
+from app.services.intent import GeminiIntentParser, IntentParser
 from app.services.predictor import NoShowPredictor
 
 log = logging.getLogger("meditrack")
@@ -22,6 +25,8 @@ class Services:
     conn: sqlite3.Connection
     availability: AvailabilityService
     predictor: NoShowPredictor
+    chat_logger: ChatLogger
+    chat: ChatService
 
 
 def bootstrap(settings: Settings, model_path: Path) -> None:
@@ -38,15 +43,24 @@ def bootstrap(settings: Settings, model_path: Path) -> None:
         train(settings.database_path, model_path=model_path, metrics_path=model_path.with_name("metrics.json"))
 
 
-def build_services(settings: Settings, model_path: Path) -> Services:
+def build_llm_parser(settings: Settings) -> IntentParser | None:
+    if not settings.llm_enabled:
+        log.warning("GEMINI_API_KEY not set: chatbot will use the rule-based parser only")
+        return None
+    log.info("Chatbot using Gemini model %s", settings.gemini_model)
+    return GeminiIntentParser(settings.gemini_api_key, settings.gemini_model, settings.llm_timeout_seconds)
+
+
+def build_services(settings: Settings, model_path: Path, llm_parser: IntentParser | None = None) -> Services:
     conn = connect(settings.database_path)
     init_schema(conn)  # idempotent; makes sure chat_logs exists
-    return Services(
-        settings=settings,
-        conn=conn,
-        availability=AvailabilityService(conn, settings.cache_ttl_seconds, settings.cache_max_entries),
-        predictor=NoShowPredictor(model_path),
-    )
+    availability = AvailabilityService(conn, settings.cache_ttl_seconds, settings.cache_max_entries)
+    predictor = NoShowPredictor(model_path)
+    chat_logger = ChatLogger(conn)
+    parser = llm_parser if llm_parser is not None else build_llm_parser(settings)
+    chat = ChatService(availability, predictor, chat_logger, conn, llm_parser=parser,
+                       cache_ttl_seconds=settings.cache_ttl_seconds)
+    return Services(settings, conn, availability, predictor, chat_logger, chat)
 
 
 def get_services(request: Request) -> Services:

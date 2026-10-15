@@ -7,6 +7,7 @@ already started.
 
 import sqlite3
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal
@@ -96,8 +97,10 @@ class AvailabilityService:
     system would also call `invalidate()` whenever a booking changes.
     """
 
-    def __init__(self, conn: sqlite3.Connection, ttl_seconds: int = 300, max_entries: int = 256):
+    def __init__(self, conn: sqlite3.Connection, ttl_seconds: int = 300, max_entries: int = 256,
+                 clock: Callable[[], datetime] = datetime.now):
         self._conn = conn
+        self._clock = clock
         self._cache: TTLCache = TTLCache(maxsize=max_entries, ttl=ttl_seconds)
         self._lock = threading.Lock()
 
@@ -107,7 +110,7 @@ class AvailabilityService:
         with self._lock:
             if key in self._cache:
                 return self._cache[key], True
-        slots = find_available_slots(self._conn, query)
+        slots = find_available_slots(self._conn, query, now=self._clock())
         with self._lock:
             self._cache[key] = slots
         return slots, False
