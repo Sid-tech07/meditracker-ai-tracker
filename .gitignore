@@ -16,3 +16,7 @@ logs/
 .DS_Store
 .vscode/
 .idea/
+
+# Trained model artefacts (recreate with: python -m ml.train)
+ml/*.joblib
+ml/metrics.json
