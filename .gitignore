@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Generated data (recreate with: python -m scripts.generate_data)
+data/*.db
+logs/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
