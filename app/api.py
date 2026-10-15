@@ -10,6 +10,7 @@ from app.container import Services, get_services
 from app.features import load_booked
 from app.schemas import AppointmentRisk, ChatRequest, ChatResponse, PredictionOut, PredictRequest, RiskBand
 from app.services.predictor import NoShowPredictor
+from app.services.stats import dashboard_stats
 
 router = APIRouter(prefix="/api")
 ServicesDep = Annotated[Services, Depends(get_services)]
@@ -95,3 +96,9 @@ def chat(body: ChatRequest, services: ServicesDep) -> ChatResponse:
 @router.get("/chat/logs")
 def chat_logs(services: ServicesDep, limit: Annotated[int, Query(ge=1, le=500)] = 50) -> list[dict]:
     return services.chat_logger.recent(limit)
+
+
+@router.get("/stats")
+def stats(services: ServicesDep) -> dict:
+    """Everything the dashboard shows, in one call."""
+    return dashboard_stats(services.conn, services.predictor)

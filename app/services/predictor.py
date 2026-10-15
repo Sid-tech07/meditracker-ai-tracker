@@ -9,9 +9,10 @@ import pandas as pd
 
 from app.features import FEATURES
 
-# Bands chosen around the ~16% base rate: "high" means at least 2.5x the average risk.
-LOW_MAX = 0.20
-MEDIUM_MAX = 0.40
+# Bands chosen around the ~16% base rate: "low" is below average, "high" is roughly
+# double the average risk (about 1 in 8 upcoming bookings, a workable call list).
+LOW_MAX = 0.15
+MEDIUM_MAX = 0.30
 
 _READABLE = {
     "lead_time_days": "booked far in advance",

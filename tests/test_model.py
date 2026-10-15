@@ -66,7 +66,7 @@ def test_missing_model_raises_clear_error(tmp_path):
         NoShowPredictor(tmp_path / "nope.joblib")
 
 
-@pytest.mark.parametrize("p,band", [(0.05, "low"), (0.199, "low"), (0.2, "medium"), (0.39, "medium"), (0.4, "high")])
+@pytest.mark.parametrize("p,band", [(0.05, "low"), (0.149, "low"), (0.15, "medium"), (0.299, "medium"), (0.3, "high"), (0.9, "high")])
 def test_risk_bands(p, band):
     assert risk_band(p) == band
 
@@ -112,3 +112,17 @@ def test_predict_endpoint(client):
 ])
 def test_predict_rejects_invalid_input(client, override):
     assert client.post("/api/predict", json={**VALID, **override}).status_code == 422
+
+
+def test_stats_endpoint_summarises_appointments(client):
+    body = client.get("/api/stats").json()
+    totals = body["totals"]
+    assert totals["appointments"] == totals["completed"] + totals["no_shows"] > 0
+    assert 0 < totals["no_show_rate"] < 1
+    assert sum(m["appointments"] for m in body["monthly"]) == totals["appointments"]
+    assert sum(d["appointments"] for d in body["by_department"]) == totals["appointments"]
+    # the generator's built-in signals show up in the aggregates
+    lead = body["by_lead_time"]
+    assert lead[-1]["no_show_rate"] > lead[1]["no_show_rate"]
+    sms = {s["sms_reminder"]: s["no_show_rate"] for s in body["by_sms_reminder"]}
+    assert sms[True] < sms[False]
