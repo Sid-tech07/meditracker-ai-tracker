@@ -36,11 +36,22 @@ def bootstrap(settings: Settings, model_path: Path) -> None:
 
         log.info("No database found, generating mock data at %s", settings.database_path)
         generate(settings.database_path, date.today())
+    else:
+        _warn_if_stale(settings.database_path)
     if not model_path.exists():
         from ml.train import train
 
         log.info("No trained model found, training one")
         train(settings.database_path, model_path=model_path, metrics_path=model_path.with_name("metrics.json"))
+
+
+def _warn_if_stale(db_path: Path) -> None:
+    """The mock schedule is anchored on the day it was generated; warn once it runs out."""
+    with sqlite3.connect(db_path) as conn:
+        last = conn.execute("SELECT MAX(start_time) FROM appointments WHERE status = 'booked'").fetchone()[0]
+    if last is None or last[:10] < date.today().isoformat():
+        log.warning("Mock schedule ends %s, before today. Regenerate it: python -m scripts.generate_data "
+                    "&& python -m ml.train", last)
 
 
 def build_llm_parser(settings: Settings) -> IntentParser | None:
