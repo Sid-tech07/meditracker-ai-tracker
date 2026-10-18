@@ -26,6 +26,7 @@ pip install -r requirements.txt
 
 cp .env.example .env               # Windows: copy .env.example .env
 # optional: put your key from https://aistudio.google.com/apikey in GEMINI_API_KEY
+# (no spaces or quotes after "=", e.g. GEMINI_API_KEY=AIza...)
 
 uvicorn app.main:app --reload
 ```
@@ -33,6 +34,14 @@ uvicorn app.main:app --reload
 Open http://localhost:8000. On first start the app generates the mock dataset (`data/meditrack.db`) and trains the model (`ml/model.joblib`), which takes a few seconds. Interactive API docs are at http://localhost:8000/docs.
 
 **No API key?** The app still works: the assistant switches to a built-in rule-based parser and the header shows "Offline parser". With a key it shows "Gemini connected".
+
+**Gemini model:** the default is `gemini-3.8-flash` (set by `GEMINI_MODEL` in `.env`). Google retires older models; if the assistant keeps answering with "Offline parser (after LLM error)", check the error with `curl -s "localhost:8000/api/chat/logs?limit=1"` and list the models your key can use:
+
+```bash
+python -c "from google import genai; from app.config import get_settings; c=genai.Client(api_key=get_settings().gemini_api_key); print([m.name for m in c.models.list() if 'flash' in m.name])"
+```
+
+After changing `.env`, restart the server fully (`--reload` only watches code files, not `.env`).
 
 Other commands:
 
@@ -161,6 +170,7 @@ Gemini is only used to turn free text into a structured query, using a JSON resp
 - **For:** the assistant cannot hallucinate a slot or a patient. Every time and percentage in a reply comes from the database. The model's output is validated like any other untrusted input, and a prompt-injection attempt can at worst produce a wrong (but valid) query.
 - **For:** one LLM call per new question (not two), so it's faster and uses less of the free quota.
 - **Against:** replies are templated, so they're less conversational than free LLM text, and the assistant can't handle requests outside its intents (it says what it can do instead).
+- **Pinned model version:** `GEMINI_MODEL` names an exact model (`gemini-3.8-flash`) rather than the `gemini-flash-latest` alias. A pinned version behaves the same from run to run, which matters for a reproducible assessment; the cost is that it breaks when Google retires the model. That happened during testing: the original default, `gemini-2.5-flash`, started returning 404 for new keys, and the fallback kept the app working until the setting was changed.
 
 ### 3. A rule-based fallback, not just an error message
 
@@ -234,12 +244,37 @@ Not automated: the real Gemini call (needs a key; covered by manual testing) and
 
 ---
 
-## Limitations and next steps
+## Limitations and future improvements
 
-- Read-only: the assistant finds slots but doesn't book them. Booking would add a write endpoint, conflict checks and cache invalidation.
-- The intent cache is keyed on exact (normalised) text, so paraphrases still call the LLM.
-- Retraining is manual (`python -m ml.train`). In production it would be scheduled, with drift monitoring on calibration.
-- One process and SQLite. For scale: PostgreSQL, Redis cache, and the LLM call moved behind a queue or async client.
+**Current limitations**
+
+- Read-only: the assistant finds free slots but can't book them.
+- One question at a time: the chatbot has no memory of earlier messages, so "what about Tuesday?" isn't understood as a follow-up.
+- The model is trained on synthetic data whose signal I designed, so its scores are an upper bound on what real data would give.
+- The intent cache matches exact (normalised) text, so a paraphrased question still calls the LLM.
+- Single process with SQLite and in-memory caches; no authentication (out of scope per the brief).
+
+**Product ideas**
+
+- **Booking from chat:** "book the 10:30 slot for Ravi" creates the appointment, checks for conflicts and clears the slot cache.
+- **Act on the risk score:** a daily call list of high-risk patients, automatic SMS or WhatsApp reminders for medium risk, and a reminder log to measure whether they reduce no-shows.
+- **Smart overbooking:** use the expected number of no-shows per doctor per day to suggest how many extra patients to slot in, or to offer freed slots to a waitlist.
+- **Multi-turn conversation:** keep short context so follow-ups like "and in the afternoon?" work.
+
+**Model improvements**
+
+- Train on real appointment history, and compare against the public Kaggle no-show dataset as a sanity check.
+- Choose the "high risk" threshold from the cost of a wasted slot versus a reminder call, instead of a fixed 30%.
+- Richer explanations with SHAP if a tree model ever wins the comparison.
+- Scheduled retraining, with monitoring of calibration and feature drift so stale models are caught.
+
+**LLM and engineering**
+
+- Retry with backoff on temporary Gemini errors (429/503) before falling back, and a startup check that the configured model exists.
+- A semantic cache (embedding similarity) so paraphrased questions also skip the LLM.
+- PostgreSQL and Redis for multiple app servers; an async LLM client.
+- Receptionist login, an audit log, and a retention policy for chat logs, which may contain patient names.
+- Monitoring: LLM error rate, fallback rate, latency and cache hit rate on a metrics endpoint.
 
 ---
 
@@ -253,11 +288,17 @@ Not automated: the real Gemini call (needs a key; covered by manual testing) and
 - Code: first drafts of the data generator, availability service, intent parsers, chatbot, model training and serving, API, UI, and tests.
 - This README: first draft of the structure and wording.
 
-**What was verified or changed afterwards**
+**Fixed while debugging during development**
 
-- Ran the full test suite and the app locally; checked every requirement in the UI at desktop and 375px phone width (no horizontal scroll).
-- Found and fixed a bug in the generator during review: upcoming bookings could be dated *after* today, which understated their lead time and risk.
-- Re-tuned the risk bands after looking at the actual probability distribution (the first thresholds flagged almost nobody as high risk).
-- Removed duplicate text in chat replies after reviewing screenshots (slot list shown both as text and as chips).
+- Upcoming bookings could be dated *after* today, which understated their lead time and risk; fixed in the generator.
+- The first risk-band thresholds flagged almost nobody as high risk; re-tuned after looking at the actual probability distribution.
+- Chat replies showed the slot list twice (as text and as chips); the UI now shows a one-line headline above the chips.
+
+**My own verification and fixes afterwards**
+
+- Ran the app locally on my Mac and the full test suite (73 passing); checked every requirement in the UI, including the phone layout in Chrome DevTools (no horizontal scroll on any tab).
+- Tested with a live Gemini API key (the automated tests use a fake LLM). Two integration problems came up, and the fallback parser kept the assistant answering through both:
+  1. **404 NOT_FOUND**: the default model `gemini-2.5-flash` is no longer available to new users. I found the error in the chat logs (`/api/chat/logs`), listed the models my key can use, and switched the default to `gemini-3.8-flash` in `app/config.py` and `.env.example`.
+  2. **400 "unexpected model name format"**: a malformed line in my local `.env` (the variable name repeated, plus stray spaces). Fixed the file and added the formatting note to the setup steps above.
 - Checked the model comparison numbers by rerunning `python -m ml.train`, and that the selection rule matched the decision.
-- <!-- TODO (Siddharth): replace this line with your own checks, e.g. tested with a real Gemini key, read through each module, any code you changed by hand. -->
+- Read through the main modules (`intent.py`, `chatbot.py`, `predictor.py`, `ml/train.py`) so I can explain the design and trade-offs myself.
