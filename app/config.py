@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.8-flash"
     llm_timeout_seconds: float = 15.0
 
     database_path: Path = PROJECT_ROOT / "data" / "meditrack.db"
